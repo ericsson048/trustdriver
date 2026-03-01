@@ -3,6 +3,14 @@
     {
       "source": "/api/:path*",
       "destination": "https://trustdriver.onrender.com/api/:path*"
+    },
+    {
+      "source": "/verify-email/:token",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/shared/:token",
+      "destination": "/index.html"
     }
   ]
 }
