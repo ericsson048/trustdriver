@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -10,6 +11,8 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .emailing import EmailDeliveryError, send_email_message
 from .models import EmailVerificationToken, User
+
+logger = logging.getLogger(__name__)
 
 
 def parse_json_body(request: HttpRequest) -> dict:
@@ -82,13 +85,14 @@ def register_view(request: HttpRequest) -> JsonResponse:
         with transaction.atomic():
             user = User.objects.create_user(email=email, password=password)
             send_verification_email(user)
-    except EmailDeliveryError:
-        return JsonResponse(
-            {
-                "error": "Unable to send the verification email right now. Please try again later.",
-            },
-            status=503,
-        )
+    except EmailDeliveryError as exc:
+        logger.exception("Failed to send verification email during registration for %s", email)
+        payload = {
+            "error": "Unable to send the verification email right now. Please try again later.",
+        }
+        if settings.DEBUG:
+            payload["details"] = str(exc)
+        return JsonResponse(payload, status=503)
 
     return JsonResponse(
         {
@@ -168,13 +172,14 @@ def resend_verification_view(request: HttpRequest) -> JsonResponse:
 
     try:
         send_verification_email(user)
-    except EmailDeliveryError:
-        return JsonResponse(
-            {
-                "error": "Unable to resend the verification email right now. Please try again later.",
-            },
-            status=503,
-        )
+    except EmailDeliveryError as exc:
+        logger.exception("Failed to resend verification email for %s", user.email)
+        payload = {
+            "error": "Unable to resend the verification email right now. Please try again later.",
+        }
+        if settings.DEBUG:
+            payload["details"] = str(exc)
+        return JsonResponse(payload, status=503)
 
     return JsonResponse(
         {
