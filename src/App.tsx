@@ -8,6 +8,7 @@ import DriveInterface from './components/DriveInterface';
 import SharedFileView from './components/SharedFileView';
 import LandingPage from './components/LandingPage';
 import Auth from './components/Auth';
+import EmailVerification from './components/EmailVerification';
 import { apiFetch, apiUrl } from './lib/apiConfig';
 
 export default function App() {
@@ -43,6 +44,23 @@ export default function App() {
     const token = path.split('/shared/')[1];
     if (token) {
       return <SharedFileView token={token} />;
+    }
+  }
+
+  if (path.startsWith('/verify-email/')) {
+    const token = path.split('/verify-email/')[1];
+    if (token) {
+      return (
+        <EmailVerification
+          token={token}
+          onContinue={() => {
+            window.history.pushState({}, '', '/');
+            setPath('/');
+            setAuthMode('login');
+            setShowAuth(true);
+          }}
+        />
+      );
     }
   }
 

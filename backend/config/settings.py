@@ -109,6 +109,13 @@ FRONTEND_ORIGINS = sorted(
     default_frontend_origins.union(env_list("DJANGO_FRONTEND_ORIGINS"))
 )
 CSRF_TRUSTED_ORIGINS = FRONTEND_ORIGINS
+FRONTEND_APP_URL = os.getenv(
+    "FRONTEND_APP_URL",
+    next(
+        (origin for origin in FRONTEND_ORIGINS if origin.startswith("https://")),
+        FRONTEND_ORIGINS[0] if FRONTEND_ORIGINS else "http://localhost:5173",
+    ),
+)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -197,6 +204,18 @@ SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "TrustDriver <noreply@trustdriver.app>")
+EMAIL_VERIFICATION_TOKEN_TTL_HOURS = int(os.getenv("EMAIL_VERIFICATION_TOKEN_TTL_HOURS", "24"))
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

@@ -60,7 +60,9 @@ Le serveur Vite proxifie automatiquement `/api` et `/media` vers `http://127.0.0
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `POST /api/auth/resend-verification`
 - `POST /api/auth/logout`
+- `GET /api/auth/verify/<token>`
 - `GET /api/auth/me`
 - `GET /api/files`
 - `POST /api/folders`

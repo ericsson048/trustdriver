@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HardDrive, Mail, Lock, Loader2, ArrowLeft } from 'lucide-react';
 import { apiFetch, apiUrl } from '../lib/apiConfig';
 
@@ -14,11 +14,47 @@ export default function Auth({ mode, onSuccess, onSwitchMode, onBack }: AuthProp
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    setError(null);
+    setInfo(null);
+    setVerificationEmail(null);
+  }, [mode]);
+
+  const resendVerification = async (targetEmail: string) => {
+    setResending(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const res = await apiFetch(apiUrl('/auth/resend-verification'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Unable to resend verification email');
+      }
+
+      setInfo(data.message || 'A new verification email has been sent.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to resend verification email');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setInfo(null);
+    setVerificationEmail(null);
 
     try {
       const endpoint = mode === 'login' ? apiUrl('/auth/login') : apiUrl('/auth/register');
@@ -31,12 +67,24 @@ export default function Auth({ mode, onSuccess, onSwitchMode, onBack }: AuthProp
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.requiresEmailVerification && data.email) {
+          setVerificationEmail(data.email);
+        }
         throw new Error(data.error || 'Authentication failed');
       }
 
+      if (data.requiresEmailVerification) {
+        setVerificationEmail(data.email || email);
+        setInfo(data.message || 'Check your email to verify your account.');
+        if (mode === 'register') {
+          setPassword('');
+        }
+        return;
+      }
+
       onSuccess(data.user);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
       setLoading(false);
     }
@@ -122,6 +170,31 @@ export default function Auth({ mode, onSuccess, onSwitchMode, onBack }: AuthProp
                     <h3 className="text-sm font-medium text-red-800">{error}</h3>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {info && (
+              <div className="rounded-md bg-green-50 p-4">
+                <div className="flex">
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-green-800">{info}</h3>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {verificationEmail && (
+              <div className="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
+                <p className="font-medium">Verification pending for {verificationEmail}</p>
+                <p className="mt-1">Open the email we sent you, then come back here to sign in.</p>
+                <button
+                  type="button"
+                  onClick={() => resendVerification(verificationEmail)}
+                  disabled={resending}
+                  className="mt-3 text-sm font-semibold text-blue-700 hover:text-blue-800 disabled:opacity-50"
+                >
+                  {resending ? 'Sending...' : 'Resend verification email'}
+                </button>
               </div>
             )}
 
