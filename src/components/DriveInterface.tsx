@@ -1,7 +1,7 @@
-import { Folder, File, MoreVertical, Download, Trash2, FolderPlus, FileUp, ChevronRight, Home, Share2, X, Copy, Check } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
-import { FileNode, Breadcrumb } from '../types';
+import { Folder, File, Download, Trash2, FolderPlus, FileUp, ChevronRight, Home, Share2, X, Copy, Check, Eye, Loader2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
+import { Breadcrumb, FileNode } from '../types';
 import { apiFetch, apiUrl, sharedFileUrl } from '../lib/apiConfig';
 import { cn } from '../lib/utils';
 
@@ -9,6 +9,37 @@ interface DriveInterfaceProps {
   onLogout: () => void;
   onSessionExpired: () => void;
 }
+
+interface SpreadsheetSheet {
+  name: string;
+  rows: string[][];
+}
+
+interface PresentationSlide {
+  title: string;
+  lines: string[];
+}
+
+interface JSZipLike {
+  loadAsync(data: ArrayBuffer): Promise<{
+    files: Record<string, unknown>;
+    file(path: string): { async(type: 'text'): Promise<string> } | null;
+  }>;
+}
+
+type PreviewKind =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'pdf'
+  | 'text'
+  | 'docx'
+  | 'spreadsheet'
+  | 'presentation'
+  | 'unsupported';
+
+const TEXT_EXTENSIONS = ['txt', 'md', 'json', 'log', 'py', 'js', 'ts', 'tsx', 'jsx', 'html', 'css', 'xml', 'yml', 'yaml'];
+const SPREADSHEET_EXTENSIONS = ['csv', 'xls', 'xlsx'];
 
 export default function DriveInterface({ onLogout, onSessionExpired }: DriveInterfaceProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -24,13 +55,147 @@ export default function DriveInterface({ onLogout, onSessionExpired }: DriveInte
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [previewFile, setPreviewFile] = useState<FileNode | null>(null);
+  const [previewText, setPreviewText] = useState('');
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [previewSheets, setPreviewSheets] = useState<SpreadsheetSheet[]>([]);
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
+  const [previewSlides, setPreviewSlides] = useState<PresentationSlide[]>([]);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getFileExtension = (name: string) => {
+    const parts = name.toLowerCase().split('.');
+    return parts.length > 1 ? parts.pop() ?? '' : '';
+  };
+
+  const getPreviewKind = (file: FileNode): PreviewKind => {
+    const mimeType = file.mime_type?.toLowerCase() ?? '';
+    const extension = getFileExtension(file.name);
+
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType === 'application/pdf' || extension === 'pdf') return 'pdf';
+    if (
+      mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      extension === 'docx'
+    ) {
+      return 'docx';
+    }
+    if (
+      [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'text/csv',
+      ].includes(mimeType) ||
+      SPREADSHEET_EXTENSIONS.includes(extension)
+    ) {
+      return 'spreadsheet';
+    }
+    if (
+      mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      extension === 'pptx'
+    ) {
+      return 'presentation';
+    }
+    if (mimeType.startsWith('text/') || TEXT_EXTENSIONS.includes(extension)) {
+      return 'text';
+    }
+
+    return 'unsupported';
+  };
+
+  const resetPreviewState = () => {
+    setPreviewText('');
+    setPreviewHtml('');
+    setPreviewSheets([]);
+    setActiveSheetIndex(0);
+    setPreviewSlides([]);
+    setPreviewError(null);
+  };
+
+  const closePreview = () => {
+    setPreviewFile(null);
+    resetPreviewState();
+  };
 
   const handleUnauthorized = () => {
     setFiles([]);
     setBreadcrumbs([]);
+    closePreview();
     onSessionExpired();
+  };
+
+  const getPreviewResponse = async (fileId: string) => {
+    const res = await apiFetch(apiUrl(`/preview/${fileId}`));
+    if (res.status === 401) {
+      handleUnauthorized();
+      return null;
+    }
+    if (!res.ok) {
+      const contentType = res.headers.get('content-type') ?? '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        throw new Error(data.error || 'Unable to preview this file');
+      }
+      throw new Error((await res.text()) || 'Unable to preview this file');
+    }
+    return res;
+  };
+
+  const parseSpreadsheet = (buffer: ArrayBuffer, xlsx: typeof import('xlsx')) => {
+    const workbook = xlsx.read(buffer, { type: 'array' });
+    const sheets = workbook.SheetNames.map((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = xlsx.utils.sheet_to_json(sheet, {
+        header: 1,
+        raw: false,
+        defval: '',
+      }) as (string | number | boolean | null)[][];
+
+      return {
+        name: sheetName,
+        rows: rows.map((row) => row.map((cell) => String(cell ?? ''))),
+      };
+    });
+
+    setPreviewSheets(sheets);
+    setActiveSheetIndex(0);
+  };
+
+  const parsePresentation = async (buffer: ArrayBuffer, jszip: JSZipLike) => {
+    const zip = await jszip.loadAsync(buffer);
+    const slidePaths = Object.keys(zip.files)
+      .filter((filePath) => /^ppt\/slides\/slide\d+\.xml$/.test(filePath))
+      .sort((left, right) => {
+        const leftNumber = Number(left.match(/slide(\d+)\.xml$/)?.[1] ?? '0');
+        const rightNumber = Number(right.match(/slide(\d+)\.xml$/)?.[1] ?? '0');
+        return leftNumber - rightNumber;
+      });
+
+    const slides = await Promise.all(
+      slidePaths.map(async (slidePath, index) => {
+        const xml = await zip.file(slidePath)?.async('text');
+        const document = new DOMParser().parseFromString(xml ?? '', 'application/xml');
+        const textNodes = Array.from(
+          document.getElementsByTagNameNS('http://schemas.openxmlformats.org/drawingml/2006/main', 't')
+        )
+          .map((node) => node.textContent?.trim() ?? '')
+          .filter(Boolean);
+
+        const [firstLine, ...remainingLines] = textNodes;
+
+        return {
+          title: firstLine || `Slide ${index + 1}`,
+          lines: remainingLines,
+        };
+      })
+    );
+
+    setPreviewSlides(slides);
   };
 
   const fetchFiles = async (folderId: string | null) => {
@@ -151,6 +316,58 @@ export default function DriveInterface({ onLogout, onSessionExpired }: DriveInte
     window.open(apiUrl(`/download/${id}`), '_blank');
   };
 
+  const openPreview = async (file: FileNode, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPreviewFile(file);
+    resetPreviewState();
+
+    const previewKind = getPreviewKind(file);
+    if (!['text', 'docx', 'spreadsheet', 'presentation'].includes(previewKind)) {
+      return;
+    }
+
+    setIsPreviewLoading(true);
+    try {
+      const res = await getPreviewResponse(file.id);
+      if (!res) {
+        return;
+      }
+
+      if (previewKind === 'text') {
+        setPreviewText(await res.text());
+        return;
+      }
+
+      const buffer = await res.arrayBuffer();
+
+      if (previewKind === 'docx') {
+        const [{ default: DOMPurify }, mammoth] = await Promise.all([
+          import('dompurify'),
+          import('mammoth/mammoth.browser'),
+        ]);
+        const result = await mammoth.default.convertToHtml({ arrayBuffer: buffer });
+        setPreviewHtml(DOMPurify.sanitize(result.value));
+        return;
+      }
+
+      if (previewKind === 'spreadsheet') {
+        const xlsx = await import('xlsx');
+        parseSpreadsheet(buffer, xlsx);
+        return;
+      }
+
+      if (previewKind === 'presentation') {
+        const { default: JSZip } = await import('jszip');
+        await parsePresentation(buffer, JSZip);
+      }
+    } catch (error) {
+      console.error('Failed to preview file', error);
+      setPreviewError(error instanceof Error ? error.message : 'Unable to preview this file');
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
   const openShareDialog = async (file: FileNode, e: React.MouseEvent) => {
     e.stopPropagation();
     setShareDialogFile(file);
@@ -220,6 +437,149 @@ export default function DriveInterface({ onLogout, onSessionExpired }: DriveInte
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const renderPreviewContent = () => {
+    if (!previewFile) {
+      return null;
+    }
+
+    const previewKind = getPreviewKind(previewFile);
+    const previewUrl = apiUrl(`/preview/${previewFile.id}`);
+
+    if (isPreviewLoading) {
+      return (
+        <div className="flex h-full min-h-80 items-center justify-center text-gray-500">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      );
+    }
+
+    if (previewError) {
+      return <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{previewError}</div>;
+    }
+
+    if (previewKind === 'image') {
+      return <img src={previewUrl} alt={previewFile.name} className="max-h-[70vh] w-full rounded-xl object-contain bg-gray-100" />;
+    }
+
+    if (previewKind === 'pdf') {
+      return <iframe src={previewUrl} title={previewFile.name} className="h-[70vh] w-full rounded-xl border border-gray-200" />;
+    }
+
+    if (previewKind === 'video') {
+      return <video src={previewUrl} controls className="max-h-[70vh] w-full rounded-xl bg-black" />;
+    }
+
+    if (previewKind === 'audio') {
+      return (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6">
+          <audio src={previewUrl} controls className="w-full" />
+        </div>
+      );
+    }
+
+    if (previewKind === 'text') {
+      return (
+        <pre className="max-h-[70vh] overflow-auto rounded-xl border border-gray-200 bg-gray-950 p-4 text-sm text-gray-100">
+          <code>{previewText}</code>
+        </pre>
+      );
+    }
+
+    if (previewKind === 'docx') {
+      return previewHtml ? (
+        <div
+          className="prose prose-slate max-w-none rounded-xl border border-gray-200 bg-white p-6"
+          dangerouslySetInnerHTML={{ __html: previewHtml }}
+        />
+      ) : (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+          No readable content was found in this document.
+        </div>
+      );
+    }
+
+    if (previewKind === 'spreadsheet') {
+      const activeSheet = previewSheets[activeSheetIndex];
+
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            {previewSheets.map((sheet, index) => (
+              <button
+                key={sheet.name}
+                onClick={() => setActiveSheetIndex(index)}
+                className={cn(
+                  'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                  index === activeSheetIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                {sheet.name}
+              </button>
+            ))}
+          </div>
+          {activeSheet ? (
+            <div className="overflow-auto rounded-xl border border-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {activeSheet.rows.map((row, rowIndex) => (
+                    <tr key={`${activeSheet.name}-${rowIndex}`} className={rowIndex === 0 ? 'bg-gray-50' : ''}>
+                      {row.map((cell, cellIndex) => (
+                        <td
+                          key={`${activeSheet.name}-${rowIndex}-${cellIndex}`}
+                          className="max-w-72 whitespace-pre-wrap px-4 py-3 align-top text-gray-700"
+                        >
+                          {cell || ' '}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+              This spreadsheet is empty.
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (previewKind === 'presentation') {
+      return previewSlides.length > 0 ? (
+        <div className="space-y-4">
+          {previewSlides.map((slide, index) => (
+            <section key={`${slide.title}-${index}`} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Slide {index + 1}
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">{slide.title}</h3>
+              </div>
+              <div className="space-y-2 text-sm text-gray-700">
+                {slide.lines.length > 0 ? (
+                  slide.lines.map((line, lineIndex) => <p key={`${slide.title}-${lineIndex}`}>{line}</p>)
+                ) : (
+                  <p>No readable text found on this slide.</p>
+                )}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+          No readable slide content was found in this presentation.
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+        Preview is not available for this file type. Use download instead.
+      </div>
+    );
   };
 
   return (
@@ -355,7 +715,14 @@ export default function DriveInterface({ onLogout, onSessionExpired }: DriveInte
                     
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
                       {file.type === 'file' && (
-                        <>
+                         <>
+                          <button 
+                            onClick={(e) => openPreview(file, e)}
+                            className="p-1.5 hover:bg-gray-100 rounded-full text-gray-600"
+                            title="Preview"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={(e) => openShareDialog(file, e)}
                             className={cn(
@@ -432,6 +799,35 @@ export default function DriveInterface({ onLogout, onSessionExpired }: DriveInte
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {previewFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-semibold text-gray-900">{previewFile.name}</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  {previewFile.mime_type || 'Unknown type'} | {formatSize(previewFile.size)}
+                </p>
+              </div>
+              <div className="ml-4 flex items-center space-x-2">
+                <button
+                  onClick={(e) => handleDownload(previewFile.id, e)}
+                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  Download
+                </button>
+                <button onClick={closePreview} className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="overflow-auto p-6">
+              {renderPreviewContent()}
+            </div>
           </div>
         </div>
       )}

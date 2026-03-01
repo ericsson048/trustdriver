@@ -169,6 +169,35 @@ def download_view(request: HttpRequest, node_id) -> FileResponse | JsonResponse:
         return JsonResponse({"error": "File on disk not found"}, status=404)
 
 
+def preview_view(request: HttpRequest, node_id) -> FileResponse | JsonResponse:
+    if request.method != "GET":
+        return method_not_allowed()
+
+    unauthorized = require_authenticated(request)
+    if unauthorized:
+        return unauthorized
+
+    try:
+        node = get_owned_node_or_404(request.user, node_id, node_type=Node.NodeType.FILE)
+    except Http404:
+        return JsonResponse({"error": "File not found"}, status=404)
+
+    if not node.file:
+        return JsonResponse({"error": "File on disk not found"}, status=404)
+
+    try:
+        response = FileResponse(
+            node.file.open("rb"),
+            as_attachment=False,
+            filename=node.name,
+            content_type=node.mime_type or None,
+        )
+        response["Content-Disposition"] = f'inline; filename="{node.name}"'
+        return response
+    except FileNotFoundError:
+        return JsonResponse({"error": "File on disk not found"}, status=404)
+
+
 @csrf_exempt
 def node_delete_view(request: HttpRequest, node_id) -> JsonResponse:
     if request.method != "DELETE":
