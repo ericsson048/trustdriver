@@ -17,12 +17,24 @@ TrustDriver utilise maintenant :
    `npm install`
 2. Installer les dependances Python :
    `pip install -r requirements.txt`
-3. Creer un fichier d'environnement a partir de l'exemple :
+3. Creer le fichier d'environnement frontend :
    `copy .env.example .env`
-4. Appliquer les migrations :
+4. Creer le fichier d'environnement backend :
+   `copy backend\\.env.example backend\\.env`
+5. Appliquer les migrations :
    `npm run migrate`
 
 Le backend peut utiliser PostgreSQL via `DATABASE_URL`. Si cette variable est definie, Django utilisera PostgreSQL a la place de SQLite.
+
+Le frontend centralise ses URLs dans `src/lib/apiConfig.ts`. Les variables optionnelles suivantes permettent d'ajuster la connexion :
+
+- `VITE_API_BASE_URL` : prefixe API, par defaut `/api`
+- `VITE_APP_BASE_URL` : origine publique de l'application, utile pour les liens de partage
+
+Separation des fichiers d'environnement :
+
+- `.env` : variables frontend Vite
+- `backend/.env` : variables backend Django
 
 ## Lancement en developpement
 

@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = BACKEND_DIR.parent
+FRONTEND_DIST_DIR = REPO_DIR / "dist"
 
 
 def load_env_file(path: Path) -> None:
@@ -29,7 +30,7 @@ def env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-load_env_file(REPO_DIR / ".env")
+load_env_file(BACKEND_DIR / ".env")
 
 
 def database_config_from_url(url: str) -> dict:
@@ -101,7 +102,7 @@ APPEND_SLASH = False
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [FRONTEND_DIST_DIR],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -144,6 +145,7 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = REPO_DIR / "staticfiles"
+STATICFILES_DIRS = [FRONTEND_DIST_DIR] if FRONTEND_DIST_DIR.exists() else []
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = REPO_DIR / "media"

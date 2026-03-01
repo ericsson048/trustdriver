@@ -2,6 +2,7 @@ import { Folder, File, MoreVertical, Download, Trash2, FolderPlus, FileUp, Chevr
 import React, { useState, useEffect, useRef } from 'react';
 import { FileNode, Breadcrumb } from '../types';
 import { format } from 'date-fns';
+import { apiUrl, sharedFileUrl } from '../lib/apiConfig';
 import { cn } from '../lib/utils';
 
 interface DriveInterfaceProps {
@@ -28,7 +29,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
   const fetchFiles = async (folderId: string | null) => {
     setIsLoading(true);
     try {
-      const url = folderId ? `/api/files?parentId=${folderId}` : '/api/files';
+      const url = folderId ? `${apiUrl('/files')}?parentId=${folderId}` : apiUrl('/files');
       const res = await fetch(url);
       const data = await res.json();
       setFiles(data.files);
@@ -49,7 +50,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!newFolderName.trim()) return;
 
     try {
-      await fetch('/api/folders', {
+      await fetch(apiUrl('/folders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newFolderName, parentId: currentFolderId }),
@@ -74,7 +75,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
 
     setIsUploading(true);
     try {
-      await fetch('/api/upload', {
+      await fetch(apiUrl('/upload'), {
         method: 'POST',
         body: formData,
       });
@@ -94,7 +95,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!confirm('Are you sure you want to delete this item?')) return;
 
     try {
-      const res = await fetch(`/api/nodes/${id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/nodes/${id}`), { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || 'Failed to delete');
@@ -108,7 +109,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
 
   const handleDownload = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(`/api/download/${id}`, '_blank');
+    window.open(apiUrl(`/download/${id}`), '_blank');
   };
 
   const openShareDialog = async (file: FileNode, e: React.MouseEvent) => {
@@ -117,7 +118,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     setCopied(false);
     
     if (file.is_shared && file.share_token) {
-      setShareLink(`${window.location.origin}/shared/${file.share_token}`);
+      setShareLink(sharedFileUrl(file.share_token));
     } else {
       setShareLink(null);
     }
@@ -127,7 +128,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!shareDialogFile) return;
     setIsSharing(true);
     try {
-      const res = await fetch(`/api/share/${shareDialogFile.id}`, {
+      const res = await fetch(apiUrl(`/share/${shareDialogFile.id}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enable }),
@@ -136,7 +137,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
       
       if (data.success) {
         if (data.shareToken) {
-          setShareLink(`${window.location.origin}/shared/${data.shareToken}`);
+          setShareLink(sharedFileUrl(data.shareToken));
         } else {
           setShareLink(null);
         }

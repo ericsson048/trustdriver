@@ -8,6 +8,7 @@
     "dev:backend": "python backend/manage.py runserver 0.0.0.0:8000",
     "dev:frontend": "vite",
     "build": "tsc && vite build",
+    "serve:backend": "python backend/manage.py runserver 0.0.0.0:8000",
     "preview": "vite preview",
     "clean": "powershell -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
     "lint": "tsc --noEmit",

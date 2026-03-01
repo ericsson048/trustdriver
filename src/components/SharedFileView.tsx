@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Download, File, AlertCircle } from 'lucide-react';
 import { FileNode } from '../types';
 import { format } from 'date-fns';
+import { apiUrl } from '../lib/apiConfig';
 
 interface SharedFileViewProps {
   token: string;
@@ -15,7 +16,7 @@ export default function SharedFileView({ token }: SharedFileViewProps) {
   useEffect(() => {
     const fetchSharedFile = async () => {
       try {
-        const res = await fetch(`/api/shared/${token}`);
+        const res = await fetch(apiUrl(`/shared/${token}`));
         if (!res.ok) {
           throw new Error('File not found or link expired');
         }
@@ -31,7 +32,7 @@ export default function SharedFileView({ token }: SharedFileViewProps) {
   }, [token]);
 
   const handleDownload = () => {
-    window.location.href = `/api/shared/${token}/download`;
+    window.location.href = apiUrl(`/shared/${token}/download`);
   };
 
   const formatSize = (bytes?: number) => {
