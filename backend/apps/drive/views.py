@@ -3,6 +3,7 @@ import json
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.clickjacking import xframe_options_exempt
 
 from .models import Node
 from .services import (
@@ -169,6 +170,7 @@ def download_view(request: HttpRequest, node_id) -> FileResponse | JsonResponse:
         return JsonResponse({"error": "File on disk not found"}, status=404)
 
 
+@xframe_options_exempt
 def preview_view(request: HttpRequest, node_id) -> FileResponse | JsonResponse:
     if request.method != "GET":
         return method_not_allowed()
