@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HardDrive, Mail, Lock, Loader2, ArrowLeft } from 'lucide-react';
-import { apiUrl } from '../lib/apiConfig';
+import { apiFetch, apiUrl } from '../lib/apiConfig';
 
 interface AuthProps {
   mode: 'login' | 'register';
@@ -22,7 +22,7 @@ export default function Auth({ mode, onSuccess, onSwitchMode, onBack }: AuthProp
 
     try {
       const endpoint = mode === 'login' ? apiUrl('/auth/login') : apiUrl('/auth/register');
-      const res = await fetch(endpoint, {
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

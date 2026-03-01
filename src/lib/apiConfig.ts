@@ -34,6 +34,12 @@ export const apiConfig = {
 export const apiUrl = (path: string) =>
   `${apiConfig.apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
+export const apiFetch: typeof fetch = (input, init) =>
+  fetch(input, {
+    credentials: 'include',
+    ...init,
+  });
+
 export const appUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return apiConfig.appBaseUrl ? `${apiConfig.appBaseUrl}${normalizedPath}` : normalizedPath;

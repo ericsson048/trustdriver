@@ -37,6 +37,14 @@ def env_bool(name: str, default: bool) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def env_list(name: str, default: str = "") -> list[str]:
+    return [
+        item.strip()
+        for item in os.getenv(name, default).split(",")
+        if item.strip()
+    ]
+
+
 load_env_file(BACKEND_DIR / ".env")
 
 
@@ -73,11 +81,34 @@ def database_config_from_url(url: str) -> dict:
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-this")
 DEBUG = env_bool("DJANGO_DEBUG", True)
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
-    if host.strip()
-]
+
+default_allowed_hosts = {
+    "127.0.0.1",
+    "localhost",
+    "trustdriver.onrender.com",
+}
+
+for candidate in (
+    os.getenv("RENDER_EXTERNAL_HOSTNAME", "").strip(),
+    urlparse(os.getenv("RENDER_EXTERNAL_URL", "").strip()).hostname or "",
+):
+    if candidate:
+        default_allowed_hosts.add(candidate)
+
+ALLOWED_HOSTS = sorted(
+    default_allowed_hosts.union(env_list("DJANGO_ALLOWED_HOSTS"))
+)
+
+default_frontend_origins = {
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "https://trustdriver.vercel.app",
+}
+
+FRONTEND_ORIGINS = sorted(
+    default_frontend_origins.union(env_list("DJANGO_FRONTEND_ORIGINS"))
+)
+CSRF_TRUSTED_ORIGINS = FRONTEND_ORIGINS
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -96,6 +127,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "config.middleware.SimpleCorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -162,7 +194,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
-SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
 
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",

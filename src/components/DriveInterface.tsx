@@ -2,7 +2,7 @@ import { Folder, File, MoreVertical, Download, Trash2, FolderPlus, FileUp, Chevr
 import React, { useState, useEffect, useRef } from 'react';
 import { FileNode, Breadcrumb } from '../types';
 import { format } from 'date-fns';
-import { apiUrl, sharedFileUrl } from '../lib/apiConfig';
+import { apiFetch, apiUrl, sharedFileUrl } from '../lib/apiConfig';
 import { cn } from '../lib/utils';
 
 interface DriveInterfaceProps {
@@ -30,7 +30,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     setIsLoading(true);
     try {
       const url = folderId ? `${apiUrl('/files')}?parentId=${folderId}` : apiUrl('/files');
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       const data = await res.json();
       setFiles(data.files);
       setBreadcrumbs(data.breadcrumbs);
@@ -50,7 +50,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!newFolderName.trim()) return;
 
     try {
-      await fetch(apiUrl('/folders'), {
+      await apiFetch(apiUrl('/folders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newFolderName, parentId: currentFolderId }),
@@ -75,7 +75,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
 
     setIsUploading(true);
     try {
-      await fetch(apiUrl('/upload'), {
+      await apiFetch(apiUrl('/upload'), {
         method: 'POST',
         body: formData,
       });
@@ -95,7 +95,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!confirm('Are you sure you want to delete this item?')) return;
 
     try {
-      const res = await fetch(apiUrl(`/nodes/${id}`), { method: 'DELETE' });
+      const res = await apiFetch(apiUrl(`/nodes/${id}`), { method: 'DELETE' });
       if (!res.ok) {
         const data = await res.json();
         alert(data.error || 'Failed to delete');
@@ -128,7 +128,7 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!shareDialogFile) return;
     setIsSharing(true);
     try {
-      const res = await fetch(apiUrl(`/share/${shareDialogFile.id}`), {
+      const res = await apiFetch(apiUrl(`/share/${shareDialogFile.id}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enable }),

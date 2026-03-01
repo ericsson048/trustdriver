@@ -8,7 +8,7 @@ import DriveInterface from './components/DriveInterface';
 import SharedFileView from './components/SharedFileView';
 import LandingPage from './components/LandingPage';
 import Auth from './components/Auth';
-import { apiUrl } from './lib/apiConfig';
+import { apiFetch, apiUrl } from './lib/apiConfig';
 
 export default function App() {
   const [path, setPath] = useState(window.location.pathname);
@@ -20,7 +20,7 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch(apiUrl('/auth/me'));
+        const res = await apiFetch(apiUrl('/auth/me'));
         if (res.ok) {
           const data = await res.json();
           setUser(data.user);
@@ -54,7 +54,7 @@ export default function App() {
 
   if (user) {
     return <DriveInterface onLogout={async () => {
-      await fetch(apiUrl('/auth/logout'), { method: 'POST' });
+      await apiFetch(apiUrl('/auth/logout'), { method: 'POST' });
       setUser(null);
     }} />;
   }
