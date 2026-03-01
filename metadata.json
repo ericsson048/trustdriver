@@ -1,0 +1,5 @@
+{
+  "name": "Trust Driver",
+  "description": "A Google Drive clone for storing files and managing folders.",
+  "requestFramePermissions": []
+}
