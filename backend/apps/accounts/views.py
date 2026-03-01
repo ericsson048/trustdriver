@@ -3,11 +3,12 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
-from django.core.mail import send_mail
+from django.db import transaction
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
+from .emailing import EmailDeliveryError, send_email_message
 from .models import EmailVerificationToken, User
 
 
@@ -43,18 +44,19 @@ def create_email_verification_token(user: User) -> EmailVerificationToken:
 def send_verification_email(user: User) -> None:
     token = create_email_verification_token(user)
     verification_link = build_verification_link(str(token.token))
-
-    send_mail(
-        subject="Verify your TrustDriver email",
-        message=(
-            "Welcome to TrustDriver.\n\n"
-            f"Verify your email by opening this link:\n{verification_link}\n\n"
-            f"This link expires in {settings.EMAIL_VERIFICATION_TOKEN_TTL_HOURS} hours."
-        ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
+    subject = "Verify your TrustDriver email"
+    text = (
+        "Welcome to TrustDriver.\n\n"
+        f"Verify your email by opening this link:\n{verification_link}\n\n"
+        f"This link expires in {settings.EMAIL_VERIFICATION_TOKEN_TTL_HOURS} hours."
     )
+    html = (
+        "<p>Welcome to TrustDriver.</p>"
+        f"<p>Verify your email by opening this link:</p><p><a href=\"{verification_link}\">{verification_link}</a></p>"
+        f"<p>This link expires in {settings.EMAIL_VERIFICATION_TOKEN_TTL_HOURS} hours.</p>"
+    )
+
+    send_email_message(to_email=user.email, subject=subject, text=text, html=html)
 
 
 @csrf_exempt
@@ -76,8 +78,18 @@ def register_view(request: HttpRequest) -> JsonResponse:
     if User.objects.filter(email=email).exists():
         return JsonResponse({"error": "User already exists"}, status=400)
 
-    user = User.objects.create_user(email=email, password=password)
-    send_verification_email(user)
+    try:
+        with transaction.atomic():
+            user = User.objects.create_user(email=email, password=password)
+            send_verification_email(user)
+    except EmailDeliveryError:
+        return JsonResponse(
+            {
+                "error": "Unable to send the verification email right now. Please try again later.",
+            },
+            status=503,
+        )
+
     return JsonResponse(
         {
             "success": True,
@@ -154,7 +166,16 @@ def resend_verification_view(request: HttpRequest) -> JsonResponse:
     if user.email_verified:
         return JsonResponse({"error": "This email is already verified."}, status=400)
 
-    send_verification_email(user)
+    try:
+        send_verification_email(user)
+    except EmailDeliveryError:
+        return JsonResponse(
+            {
+                "error": "Unable to resend the verification email right now. Please try again later.",
+            },
+            status=503,
+        )
+
     return JsonResponse(
         {
             "success": True,

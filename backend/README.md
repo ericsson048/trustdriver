@@ -32,10 +32,12 @@ Variables principales :
 - `EMAIL_HOST_PASSWORD`
 - `EMAIL_USE_TLS`
 - `DEFAULT_FROM_EMAIL`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL`
 
 En production, definir `DJANGO_DEBUG=false`. Le frontend Vercel appelle l'API Render sur un autre domaine, donc les cookies de session doivent etre emis avec `SameSite=None`, ce que Django ne fait pas quand `DEBUG=true`.
 
-La verification email utilise `FRONTEND_APP_URL` pour construire le lien clique par l'utilisateur. En local, vous pouvez garder `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` pour afficher le lien de verification dans les logs. En production, configurez un vrai fournisseur SMTP.
+La verification email utilise `FRONTEND_APP_URL` pour construire le lien clique par l'utilisateur. En local, vous pouvez garder `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` pour afficher le lien de verification dans les logs. En production, vous pouvez soit utiliser SMTP, soit definir `RESEND_API_KEY` pour envoyer les emails via l'API Resend. Si `RESEND_API_KEY` est present, il est prioritaire sur SMTP.
 
 ## Render
 
