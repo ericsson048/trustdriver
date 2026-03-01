@@ -5,7 +5,14 @@ from urllib.parse import parse_qs, urlparse
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPO_DIR = BACKEND_DIR.parent
-FRONTEND_DIST_DIR = REPO_DIR / "dist"
+FRONTEND_DIST_DIR = next(
+    (
+        candidate
+        for candidate in (BACKEND_DIR / "dist", REPO_DIR / "dist")
+        if candidate.exists()
+    ),
+    REPO_DIR / "dist",
+)
 
 
 def load_env_file(path: Path) -> None:
@@ -127,7 +134,7 @@ else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": REPO_DIR / "backend.sqlite3",
+            "NAME": BACKEND_DIR / "backend.sqlite3",
         }
     }
 
@@ -144,11 +151,11 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "/static/"
-STATIC_ROOT = REPO_DIR / "staticfiles"
+STATIC_ROOT = BACKEND_DIR / "staticfiles"
 STATICFILES_DIRS = [FRONTEND_DIST_DIR] if FRONTEND_DIST_DIR.exists() else []
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = REPO_DIR / "media"
+MEDIA_ROOT = BACKEND_DIR / "media"
 
 AUTH_USER_MODEL = "accounts.User"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

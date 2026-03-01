@@ -13,3 +13,6 @@ __pycache__/
 backend.sqlite3
 media/
 staticfiles/
+backend/backend.sqlite3
+backend/media/
+backend/staticfiles/
