@@ -1,9 +1,15 @@
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
+const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
+
 const normalizeBasePath = (value: string) => {
   const trimmed = trimTrailingSlash(value.trim());
   if (!trimmed) {
     return '/api';
+  }
+
+  if (isAbsoluteUrl(trimmed)) {
+    return trimmed;
   }
 
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;

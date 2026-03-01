@@ -34,7 +34,12 @@ Le frontend centralise ses URLs dans `src/lib/apiConfig.ts`. Les variables optio
 Separation des fichiers d'environnement :
 
 - `.env` : variables frontend Vite
+- `.env.production` : variables frontend pour le build de production
 - `backend/.env` : variables backend Django
+
+Le projet est configure en production pour utiliser :
+
+- backend public : `https://trustdriver.onrender.com`
 
 ## Lancement en developpement
 
