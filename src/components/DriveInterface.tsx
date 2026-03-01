@@ -7,9 +7,10 @@ import { cn } from '../lib/utils';
 
 interface DriveInterfaceProps {
   onLogout: () => void;
+  onSessionExpired: () => void;
 }
 
-export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
+export default function DriveInterface({ onLogout, onSessionExpired }: DriveInterfaceProps) {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [files, setFiles] = useState<FileNode[]>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([]);
@@ -26,16 +27,33 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const handleUnauthorized = () => {
+    setFiles([]);
+    setBreadcrumbs([]);
+    onSessionExpired();
+  };
+
   const fetchFiles = async (folderId: string | null) => {
     setIsLoading(true);
     try {
       const url = folderId ? `${apiUrl('/files')}?parentId=${folderId}` : apiUrl('/files');
       const res = await apiFetch(url);
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       const data = await res.json();
-      setFiles(data.files);
-      setBreadcrumbs(data.breadcrumbs);
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to fetch files');
+      }
+
+      setFiles(Array.isArray(data.files) ? data.files : []);
+      setBreadcrumbs(Array.isArray(data.breadcrumbs) ? data.breadcrumbs : []);
     } catch (error) {
       console.error('Failed to fetch files', error);
+      setFiles([]);
+      setBreadcrumbs([]);
     } finally {
       setIsLoading(false);
     }
@@ -50,11 +68,19 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
     if (!newFolderName.trim()) return;
 
     try {
-      await apiFetch(apiUrl('/folders'), {
+      const res = await apiFetch(apiUrl('/folders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newFolderName, parentId: currentFolderId }),
       });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create folder');
+      }
       setNewFolderName('');
       setShowNewFolderDialog(false);
       fetchFiles(currentFolderId);
@@ -75,10 +101,18 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
 
     setIsUploading(true);
     try {
-      await apiFetch(apiUrl('/upload'), {
+      const res = await apiFetch(apiUrl('/upload'), {
         method: 'POST',
         body: formData,
       });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to upload file');
+      }
       fetchFiles(currentFolderId);
     } catch (error) {
       console.error('Failed to upload file', error);
@@ -96,8 +130,13 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
 
     try {
       const res = await apiFetch(apiUrl(`/nodes/${id}`), { method: 'DELETE' });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         alert(data.error || 'Failed to delete');
         return;
       }
@@ -133,7 +172,15 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enable }),
       });
+      if (res.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update sharing');
+      }
       
       if (data.success) {
         if (data.shareToken) {
@@ -142,7 +189,13 @@ export default function DriveInterface({ onLogout }: DriveInterfaceProps) {
           setShareLink(null);
         }
         // Update local state
-        setFiles(files.map(f => f.id === shareDialogFile.id ? { ...f, is_shared: enable ? 1 : 0, share_token: data.shareToken } : f));
+        setFiles((currentFiles) =>
+          currentFiles.map((file) =>
+            file.id === shareDialogFile.id
+              ? { ...file, is_shared: enable ? 1 : 0, share_token: data.shareToken }
+              : file
+          )
+        );
         setShareDialogFile({ ...shareDialogFile, is_shared: enable ? 1 : 0, share_token: data.shareToken });
       }
     } catch (error) {

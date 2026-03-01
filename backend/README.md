@@ -25,6 +25,8 @@ Variables principales :
 - `DJANGO_ALLOWED_HOSTS`
 - `DATABASE_URL`
 
+En production, definir `DJANGO_DEBUG=false`. Le frontend Vercel appelle l'API Render sur un autre domaine, donc les cookies de session doivent etre emis avec `SameSite=None`, ce que Django ne fait pas quand `DEBUG=true`.
+
 ## Render
 
 Si le `Root Directory` du service Render est `backend`, utiliser :

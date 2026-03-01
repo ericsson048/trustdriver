@@ -80,7 +80,7 @@ def database_config_from_url(url: str) -> dict:
 
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-this")
-DEBUG = env_bool("DJANGO_DEBUG", True)
+DEBUG = env_bool("DJANGO_DEBUG", False)
 
 default_allowed_hosts = {
     "127.0.0.1",

@@ -56,6 +56,10 @@ export default function App() {
     return <DriveInterface onLogout={async () => {
       await apiFetch(apiUrl('/auth/logout'), { method: 'POST' });
       setUser(null);
+    }} onSessionExpired={() => {
+      setUser(null);
+      setAuthMode('login');
+      setShowAuth(true);
     }} />;
   }
 
