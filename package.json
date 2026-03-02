@@ -14,7 +14,8 @@
     "lint": "tsc --noEmit",
     "migrate": "python backend/manage.py migrate",
     "createsuperuser": "python backend/manage.py createsuperuser",
-    "test:api": "python backend/scripts/test_api_flow.py"
+    "test:api": "python backend/scripts/test_api_flow.py",
+    "test:email": "python backend/scripts/test_email.py"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
