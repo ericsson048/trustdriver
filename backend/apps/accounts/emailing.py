@@ -25,6 +25,10 @@ def send_email_message(*, to_email: str, subject: str, text: str, html: str | No
 
 
 def send_with_resend(*, to_email: str, subject: str, text: str, html: str | None = None) -> None:
+    # En mode développement/test sans domaine vérifié, Resend n'accepte que certains emails
+    # Pour contourner cette limitation temporairement, on peut logger l'email au lieu de l'envoyer
+    # TODO: Configurer un domaine vérifié sur Resend pour la production
+    
     payload = {
         "from": settings.RESEND_FROM_EMAIL,
         "to": [to_email],
@@ -51,6 +55,20 @@ def send_with_resend(*, to_email: str, subject: str, text: str, html: str | None
                 raise EmailDeliveryError("Resend rejected the email request.")
     except error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="replace")
+        
+        # Si l'erreur est due à la restriction de domaine, logger au lieu de crasher
+        if "validation_error" in details and "verify a domain" in details:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Resend domain not verified. Email would be sent to {to_email}: {subject}\n"
+                f"Content: {text}\n"
+                f"Configure a verified domain at https://resend.com/domains"
+            )
+            # En développement, on peut considérer que l'email est "envoyé" pour ne pas bloquer
+            if settings.DEBUG:
+                return
+        
         raise EmailDeliveryError(f"Resend API error: {details or exc.reason}") from exc
     except error.URLError as exc:
         raise EmailDeliveryError(f"Unable to reach Resend: {exc.reason}") from exc

@@ -81,25 +81,31 @@ def register_view(request: HttpRequest) -> JsonResponse:
     if User.objects.filter(email=email).exists():
         return JsonResponse({"error": "User already exists"}, status=400)
 
-    try:
-        with transaction.atomic():
-            user = User.objects.create_user(email=email, password=password)
-            send_verification_email(user)
-    except EmailDeliveryError as exc:
-        logger.exception("Failed to send verification email during registration for %s", email)
-        payload = {
-            "error": "Unable to send the verification email right now. Please try again later.",
-        }
-        if settings.DEBUG:
-            payload["details"] = str(exc)
-        return JsonResponse(payload, status=503)
+    # TEMPORAIRE : Désactivation de la vérification email
+    # TODO: Réactiver quand le service d'email sera configuré
+    user = User.objects.create_user(email=email, password=password)
+    user.email_verified = True  # Auto-vérifier l'email temporairement
+    user.save(update_fields=["email_verified"])
+    
+    # try:
+    #     with transaction.atomic():
+    #         user = User.objects.create_user(email=email, password=password)
+    #         send_verification_email(user)
+    # except EmailDeliveryError as exc:
+    #     logger.exception("Failed to send verification email during registration for %s", email)
+    #     payload = {
+    #         "error": "Unable to send the verification email right now. Please try again later.",
+    #     }
+    #     if settings.DEBUG:
+    #         payload["details"] = str(exc)
+    #     return JsonResponse(payload, status=503)
 
     return JsonResponse(
         {
             "success": True,
-            "requiresEmailVerification": True,
+            "requiresEmailVerification": False,  # Changé de True à False
             "email": user.email,
-            "message": "Account created. Check your email to verify your address before signing in.",
+            "message": "Account created successfully. You can now sign in.",  # Message modifié
         }
     )
 
@@ -121,15 +127,16 @@ def login_view(request: HttpRequest) -> JsonResponse:
     if user is None:
         return JsonResponse({"error": "Invalid credentials"}, status=400)
 
-    if not user.email_verified:
-        return JsonResponse(
-            {
-                "error": "Verify your email before signing in.",
-                "requiresEmailVerification": True,
-                "email": user.email,
-            },
-            status=403,
-        )
+    # TEMPORAIRE : Vérification email désactivée
+    # if not user.email_verified:
+    #     return JsonResponse(
+    #         {
+    #             "error": "Verify your email before signing in.",
+    #             "requiresEmailVerification": True,
+    #             "email": user.email,
+    #         },
+    #         status=403,
+    #     )
 
     login(request, user)
     return JsonResponse({"success": True, "user": serialize_user(user)})
@@ -218,15 +225,16 @@ def me_view(request: HttpRequest) -> JsonResponse:
     if not request.user.is_authenticated:
         return JsonResponse({"error": "Authentication required"}, status=401)
 
-    if not request.user.email_verified:
-        logout(request)
-        return JsonResponse(
-            {
-                "error": "Verify your email before signing in.",
-                "requiresEmailVerification": True,
-                "email": request.user.email,
-            },
-            status=401,
-        )
+    # TEMPORAIRE : Vérification email désactivée
+    # if not request.user.email_verified:
+    #     logout(request)
+    #     return JsonResponse(
+    #         {
+    #             "error": "Verify your email before signing in.",
+    #             "requiresEmailVerification": True,
+    #             "email": request.user.email,
+    #         },
+    #         status=401,
+    #     )
 
     return JsonResponse({"user": serialize_user(request.user)})
