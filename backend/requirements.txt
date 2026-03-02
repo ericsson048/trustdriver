@@ -3,3 +3,4 @@ psycopg[binary]>=3.2,<3.3
 djangorestframework>=3.15,<3.16
 drf-spectacular>=0.28,<0.29
 gunicorn>=23.0,<24.0
+resend>=2.0,<3.0
